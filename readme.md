@@ -6,7 +6,7 @@ Easily pull Wordpress in to your plugin, library or package as a composer develo
 
 From command line:
 
-    composer require makeweb/wordpress-test-environment
+    composer require --dev makeweb/wordpress-test-environment
 
 ## Basic Usage
 
@@ -21,7 +21,7 @@ DATABASE_PASSWORD=database_password_here
 DATABASE_HOST=127.0.0.1
 ```
 
-3) Add the following line to the `setUp()` method of your test case class or to your tests bootstrap file to boot the wordpress environment
+3) Add the following lines to the `setUp()` method of your test case class or to your tests bootstrap file to boot the wordpress environment, being sure to pass in the path to the directory of your .env file to the `withEnvPath()` method.
 ```
 (new MakeWeb\WordpressTestEnvironment\WordpressTestEnvironment)
     ->withEnvPath(__DIR__.'/..')
