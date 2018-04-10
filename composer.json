@@ -1,0 +1,33 @@
+{
+    "name": "makeweb/wordpress-test-environment",
+    "description": "Boot wordpress to test your code in an actual wordpress environment",
+    "type": "library",
+    "license": "MIT",
+    "repositories": [{
+        "type": "package",
+        "package": {
+            "name": "wordpress/wordpress",
+            "version": "4.9.5",
+            "source": {
+                "url": "git@github.com:johnpbloch/wordpress-core.git",
+                "type": "git",
+                "reference": "4.9.5"
+            }
+        }
+    }],
+    "authors": [
+        {
+            "name": "Andrew Feeney",
+            "email": "webspannerdev@gmail.com"
+        }
+    ],
+    "require": {
+        "wordpress/wordpress": "^4.9.5",
+        "vlucas/phpdotenv": "^2.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "MakeWeb\\WordpressTestEnvironment\\": "src/"
+        }
+    }
+}
