@@ -30,7 +30,7 @@ class WordpressTestEnvironment
 
     public function basePath($relativePath = null)
     {
-        return $this->appendRelativePath(__DIR__.'/../../../vendor/wordpress/wordpress', $relativePath);
+        return $this->appendRelativePath(__DIR__.'/../../../wordpress/wordpress', $relativePath);
     }
 
     public function withEnvPath($path)
