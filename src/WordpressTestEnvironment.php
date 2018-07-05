@@ -8,19 +8,31 @@ class WordpressTestEnvironment
 {
     protected $envPath;
 
+    protected $http;
+
+    public function __construct()
+    {
+        $this->http = new Http;
+    }
+
     public function boot()
     {
+        $wordpress = new Wordpress;
+
+        $this->defineHttpGlobalFunctions();
+
         $this->loadEnv();
 
-        if ($this->isNotSetup()) {
+        // if ($this->isNotSetup()) {
             $this->setup();
-        }
-
-        // if (!is_wordpress_installed()) {
-        //     $this->installWordpress();
         // }
 
+        // if ($this->wordpressIsNotInstalled()) {
+            $this->installWordpress();
+        // }
         $this->includeFiles();
+
+        return $this;
     }
 
     public function isNotSetup()
@@ -53,6 +65,11 @@ class WordpressTestEnvironment
             $wpConfig = str_replace($original, $substitution, $wpConfig);
         }
 
+        $wpConfig .= implode([
+            "\n\n",
+            "define('WP_SITEURL', '".(empty($this->env('WP_SITEURL')) ? 'http://localhost/' : $this->env('WP_SITEURL'))."');",
+        ], '');
+
         file_put_contents($this->basePath('wp-config.php'), $wpConfig);
 
         // We also save a hash of the environment variables which we can use later to check if the wp-config
@@ -81,6 +98,12 @@ class WordpressTestEnvironment
 
         /** Load wpdb */
         require_once ABSPATH.WPINC.'/wp-db.php';
+
+        global $wpdb;
+        $wpdb->query( 'SET autocommit = 0;' );
+        $wpdb->query( 'START TRANSACTION;' );
+        add_filter( 'query', array( $this, 'createTemporaryTables' ) );
+        add_filter( 'query', array( $this, 'dropTemporaryTables' ) );
 
         wp_install('Wordpress Test Environment', 'admin', 'admin@domain.com', true, '', wp_slash('password'), $loaded_language);
     }
@@ -125,4 +148,40 @@ class WordpressTestEnvironment
     {
         return sha1(file_get_contents($this->envPath('.env')));
     }
+
+    protected function defineHttpGlobalFunctions()
+    {
+        $this->setGlobalFunctionCallback('wp_redirect', function(...$args) {
+            $this->http->handleRedirect(...$args);
+        });
+    }
+
+    protected function setGlobalFunctionCallback($functionName, $callback)
+    {
+        global $global_function_callbacks;
+
+        $global_function_callbacks[$functionName] = $callback;
+
+        eval("function $functionName(...\$args) {
+            global \$global_function_callbacks;
+            return \$global_function_callbacks['$functionName'](...\$args);
+        }");
+    }
+
+    protected function wordpressIsNotInstalled()
+    {
+        return false;
+    }
+
+	public function createTemporaryTables( $query ) {
+		if ( 'CREATE TABLE' === substr( trim( $query ), 0, 12 ) )
+			return substr_replace( trim( $query ), 'CREATE TEMPORARY TABLE', 0, 12 );
+		return $query;
+	}
+    
+    public function dropTemporaryTables( $query ) {
+		if ( 'DROP TABLE' === substr( trim( $query ), 0, 10 ) )
+			return substr_replace( trim( $query ), 'DROP TEMPORARY TABLE', 0, 10 );
+		return $query;
+	}
 }
