@@ -24,7 +24,7 @@ class Wordpress
         $this->database = new Database($this);
     }
 
-    public function boot()
+    public function initialise()
     {
         // This sets the default basepath if none has been set
         $this->withBasePath($this->basePath);
@@ -43,6 +43,13 @@ class Wordpress
         }
 
         return $this;
+    }
+
+    public function boot()
+    {
+        $this->initialise();
+
+        return $this->include('wp-load.php');
     }
 
     public function isNotSetup()
@@ -143,12 +150,12 @@ class Wordpress
 
         wp_install('Wordpress Test Environment', 'admin', 'admin@domain.com', true, '', wp_slash('password'), $loaded_language);
 
-        $wpdb->get_results("SHOW TABLES");
+        $wpdb->get_results('SHOW TABLES');
     }
 
-    protected function includeFiles()
+    protected function include($filename)
     {
-        return require_once $this->basePath('index.php');
+        return require_once $this->basePath($filename);
     }
 
     protected function env($key)
@@ -199,6 +206,10 @@ class Wordpress
     {
         global $global_function_callbacks;
 
+        if (isset($global_function_callbacks[$functionName])) {
+            return;
+        }
+
         $global_function_callbacks[$functionName] = $callback;
 
         eval("function $functionName(...\$args) {
@@ -219,16 +230,15 @@ class Wordpress
 
     public function get($uri = '/')
     {
-        $this->boot();
+        $this->initialise();
 
         $this->installPlugins();
 
         ob_start();
 
-            $this->includeFiles();
-            $code = 200;
+        $this->include('index.php');
 
-        return new Response(ob_get_clean(), $code);
+        return new Response(ob_get_clean(), 200);
     }
 
     public function installPlugins()
