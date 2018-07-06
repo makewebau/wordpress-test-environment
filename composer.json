@@ -23,7 +23,8 @@
     ],
     "require": {
         "wordpress/wordpress": "^4.9.5",
-        "vlucas/phpdotenv": "^2.4"
+        "vlucas/phpdotenv": "^2.4",
+        "tightenco/collect": "^5.6"
     },
     "autoload": {
         "psr-4": {
