@@ -33,11 +33,14 @@ SITE_URL=example.test
 Pass the relative path to the directory which contains your .env file into `loadEnvFrom()`
 
 ```
-class TestCase extends PHPUnit\Framework\TestCase;
+use MakeWeb\WordpressTestEnvironment\Wordpress;
+use PHPUnit\Framework\TestCase as BaseTestCase;
+
+class TestCase extends BaseTestCase;
 {
     public function setUp()
     {
-        $this->wordpress = (new MakeWeb\WordpressTestEnvironment\Wordpress)
+        $this->wordpress = (new Wordpress)
             ->loadEnvFrom(__DIR__.'/..');
     } 
 }
@@ -102,7 +105,7 @@ class MyPluginTest extends TestCase
         // Request the front page of the wordpress site and capture the result
         $response = $this->wordpress->get('/');
 
-        // Assert that the response returned a 200 status code
+        // Assert that the response returned a 200 http status code
         $response->assertSuccessful();
 
         // Assert that our text was output in the html
