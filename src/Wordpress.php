@@ -3,53 +3,93 @@
 namespace MakeWeb\WordpressTestEnvironment;
 
 use Dotenv\Dotenv;
+use MakeWeb\WordpressTestEnvironment\Http\Response;
+use MakeWeb\WordpressTestEnvironment\Http\RedirectHandler;
+use MakeWeb\WordpressTestEnvironment\Database\Database;
+use Illuminate\Support\Collection;
 
-class WordpressTestEnvironment
+class Wordpress
 {
     protected $envPath;
 
+    protected $basePath;
+
     protected $http;
+
+    protected $plugins = [];
 
     public function __construct()
     {
-        $this->http = new Http;
+        $this->redirectHandler = new RedirectHandler;
+        $this->database = new Database($this);
     }
 
     public function boot()
     {
-        $wordpress = new Wordpress;
+        // This sets the default basepath if none has been set
+        $this->withBasePath($this->basePath);
 
         $this->defineHttpGlobalFunctions();
 
         $this->loadEnv();
 
-        // if ($this->isNotSetup()) {
+        $this->pdo = $this->database->connect();
+        if ($this->isNotSetup()) {
             $this->setup();
-        // }
+        }
 
-        // if ($this->wordpressIsNotInstalled()) {
-            $this->installWordpress();
-        // }
-        $this->includeFiles();
+        if ($this->isNotInstalled()) {
+            $this->install();
+        }
 
         return $this;
     }
 
     public function isNotSetup()
     {
-        return !file_exists($this->basePath('wp-config.php')) || $this->getEnvHash() !== file_get_contents($this->envPath('.env-hash'));
+        // TODO Remove this
+        return true;
+
+        return !$this->isSetup();
+    }
+
+    public function isSetup()
+    {
+        return file_exists($this->basePath('wp-config.php')) && $this->getEnvHash() === file_get_contents($this->envPath('.env-hash'));
     }
 
     public function basePath($relativePath = null)
     {
-        return $this->appendRelativePath(__DIR__.'/../../../wordpress/wordpress', $relativePath);
+        return $this->appendRelativePath($this->basePath, $relativePath);
     }
 
-    public function withEnvPath($path)
+    public function loadEnvFrom($path)
     {
         $this->envPath = realpath($path);
 
         return $this;
+    }
+
+    public function withBasePath($path = __DIR__.'/../../../wordpress/wordpress')
+    {
+        $this->basePath = realpath($path);
+
+        return $this;
+    }
+
+    public function withPlugin($pluginFilePath)
+    {
+        $this->plugins[] = realpath($pluginFilePath);
+
+        return $this;
+    }
+
+    /**
+     * Returns the url of the wordpress installation
+     */
+    public function url()
+    {
+        return get_site_url();
     }
 
     protected function setup()
@@ -77,7 +117,7 @@ class WordpressTestEnvironment
         file_put_contents($this->envPath('.env-hash'), $this->getEnvHash());
     }
 
-    protected function installWordpress()
+    protected function install()
     {
         /**
          * We are installing WordPress.
@@ -100,17 +140,15 @@ class WordpressTestEnvironment
         require_once ABSPATH.WPINC.'/wp-db.php';
 
         global $wpdb;
-        $wpdb->query( 'SET autocommit = 0;' );
-        $wpdb->query( 'START TRANSACTION;' );
-        add_filter( 'query', array( $this, 'createTemporaryTables' ) );
-        add_filter( 'query', array( $this, 'dropTemporaryTables' ) );
 
         wp_install('Wordpress Test Environment', 'admin', 'admin@domain.com', true, '', wp_slash('password'), $loaded_language);
+
+        $wpdb->get_results("SHOW TABLES");
     }
 
     protected function includeFiles()
     {
-        require_once $this->basePath('wp-load.php');
+        return require_once $this->basePath('index.php');
     }
 
     protected function env($key)
@@ -135,7 +173,8 @@ class WordpressTestEnvironment
 
     protected function appendRelativePath($originalPath, $relativePath = null)
     {
-        $basePath = realpath($originalPath);
+        // $basePath = realpath($originalPath);
+        $basePath = $originalPath;
 
         if (!is_null($relativePath)) {
             return $basePath.'/'.$relativePath;
@@ -151,8 +190,8 @@ class WordpressTestEnvironment
 
     protected function defineHttpGlobalFunctions()
     {
-        $this->setGlobalFunctionCallback('wp_redirect', function(...$args) {
-            $this->http->handleRedirect(...$args);
+        $this->setGlobalFunctionCallback('wp_redirect', function (...$args) {
+            $this->redirectHandler->handle(...$args);
         });
     }
 
@@ -168,20 +207,63 @@ class WordpressTestEnvironment
         }");
     }
 
-    protected function wordpressIsNotInstalled()
+    protected function isNotInstalled()
     {
-        return false;
+        return !$this->isInstalled();
     }
 
-	public function createTemporaryTables( $query ) {
-		if ( 'CREATE TABLE' === substr( trim( $query ), 0, 12 ) )
-			return substr_replace( trim( $query ), 'CREATE TEMPORARY TABLE', 0, 12 );
-		return $query;
-	}
-    
-    public function dropTemporaryTables( $query ) {
-		if ( 'DROP TABLE' === substr( trim( $query ), 0, 10 ) )
-			return substr_replace( trim( $query ), 'DROP TEMPORARY TABLE', 0, 10 );
-		return $query;
-	}
+    protected function isInstalled()
+    {
+        return file_exists($this->basePath('wp-config.php'));
+    }
+
+    public function get($uri = '/')
+    {
+        $this->boot();
+
+        $this->installPlugins();
+
+        ob_start();
+
+            $this->includeFiles();
+            $code = 200;
+
+        return new Response(ob_get_clean(), $code);
+    }
+
+    public function installPlugins()
+    {
+        foreach ($this->plugins as $pluginFilePath) {
+            $plugin = (new Plugin($this))->withPath($pluginFilePath);
+            $plugin->symlink();
+            $plugin->activate();
+        }
+    }
+
+    public function activePlugins()
+    {
+        return (new Collection($this->getOption('active_plugins')));
+    }
+
+    public function setActivePlugins($activePlugins)
+    {
+        return $this->updateOption('active_plugins', $activePlugins);
+    }
+
+    public function updateOption($key, $value)
+    {
+        return $this->database
+            ->update('options')
+            ->set('option_value', serialize($value))
+            ->where('option_name', '=', $key)
+            ->execute();
+    }
+
+    public function getOption($key)
+    {
+        return unserialize($this->database
+            ->select('options')
+            ->where('option_name', '=', $key)
+            ->first()['option_value']);
+    }
 }
