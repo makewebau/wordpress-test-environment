@@ -57,11 +57,22 @@ class Wordpress
         $this->initialise();
         $this->include('wp-load.php');
 
+        if ($this->useTransactions) {
+            $this->startTransactions();
+        }
+
         add_filter('wp_die_handler', function () {
             $this->wpDieHandler();
         });
 
-        return $this->include('wp-load.php');
+        return $this;
+    }
+
+    public function useTransactions()
+    {
+        $this->useTransactions = true;
+
+        return $this;
     }
 
     public function isNotSetup()
@@ -212,6 +223,25 @@ class Wordpress
         $this->setGlobalFunctionCallback('wp_redirect', function (...$args) {
             $this->redirectHandler->handle(...$args);
         });
+    }
+
+    protected function startTransactions()
+    {
+        // We roll back first to make sure any open transactions are rolled back between tests
+        // in the case that transactions are opened twice before rollback
+        $this->rollbackTransactions();
+
+        global $wpdb;
+
+        $wpdb->query('SET autocommit = 0;');
+        $wpdb->query('START TRANSACTION;');
+    }
+
+    public function rollbackTransactions()
+    {
+        global $wpdb;
+
+        $wpdb->query('ROLLBACK');
     }
 
     protected function setGlobalFunctionCallback($functionName, $callback)

@@ -19,6 +19,13 @@ class QueryBuilder
         $this->database = $database;
     }
 
+    public function fromRaw($rawQuery)
+    {
+        $this->addPhrase($rawQuery);
+
+        return $this->execute($this->build());
+    }
+
     public function select($tableName)
     {
         $this->addPhrase("SELECT * FROM {$this->prefix($tableName)}");
