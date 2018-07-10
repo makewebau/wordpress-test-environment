@@ -6,6 +6,7 @@ use Dotenv\Dotenv;
 use MakeWeb\WordpressTestEnvironment\Http\Response;
 use MakeWeb\WordpressTestEnvironment\Http\RedirectHandler;
 use MakeWeb\WordpressTestEnvironment\Database\Database;
+use MakeWeb\WordpressTestEnvironment\Exceptions\WPDieException;
 use Illuminate\Support\Collection;
 
 class Wordpress
@@ -18,8 +19,13 @@ class Wordpress
 
     protected $plugins = [];
 
+
+    protected $useTransactions = false;
+
     public function __construct()
     {
+        define('WORDPRESS_TEST_ENVIRONMENT', true);
+
         $this->redirectHandler = new RedirectHandler;
         $this->database = new Database($this);
     }
@@ -34,6 +40,7 @@ class Wordpress
         $this->loadEnv();
 
         $this->pdo = $this->database->connect();
+
         if ($this->isNotSetup()) {
             $this->setup();
         }
@@ -48,6 +55,11 @@ class Wordpress
     public function boot()
     {
         $this->initialise();
+        $this->include('wp-load.php');
+
+        add_filter('wp_die_handler', function () {
+            $this->wpDieHandler();
+        });
 
         return $this->include('wp-load.php');
     }
@@ -230,13 +242,24 @@ class Wordpress
 
     public function get($uri = '/')
     {
-        $this->initialise();
-
         $this->installPlugins();
+
+        // Set up the WordPress query.
+        wp();
+
+        define('WP_USE_THEMES', true);
 
         ob_start();
 
-        $this->include('index.php');
+        $_SERVER['REQUEST_URI'] = $uri;
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+
+        // Load the theme template.
+        try {
+            require_once(ABSPATH.WPINC.'/template-loader.php');
+        } catch (WPDieException $e) {
+
+        }
 
         return new Response(ob_get_clean(), 200);
     }
@@ -276,4 +299,9 @@ class Wordpress
             ->where('option_name', '=', $key)
             ->first()['option_value']);
     }
+
+    public function wpDieHandler($message = null)
+    {
+		throw new WPDieException($message);
+	}
 }
