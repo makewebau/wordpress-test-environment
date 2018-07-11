@@ -19,7 +19,6 @@ class Wordpress
 
     protected $plugins = [];
 
-
     protected $useTransactions = false;
 
     public function __construct()
@@ -333,6 +332,6 @@ class Wordpress
 
     public function wpDieHandler($message = null)
     {
-		throw new WPDieException($message);
-	}
+        throw new WPDieException($message);
+    }
 }
