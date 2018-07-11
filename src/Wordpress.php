@@ -281,14 +281,15 @@ class Wordpress
 
         ob_start();
 
-        $_SERVER['REQUEST_URI'] = $uri;
+        $_SERVER['REQUEST_URI'] = $uri.(count($queryParameters) ? '?' : '').($queryString = http_build_query($queryParameters));
         $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = $queryString;
+        $_GET = $queryParameters;
 
         // Load the theme template.
         try {
-            require_once(ABSPATH.WPINC.'/template-loader.php');
+            require_once ABSPATH.WPINC.'/template-loader.php';
         } catch (WPDieException $e) {
-
         }
 
         return new Response(ob_get_clean(), 200);
