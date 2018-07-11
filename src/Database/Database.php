@@ -12,6 +12,11 @@ class Database
         $this->wordpress = $wordpress;
     }
 
+    public function wordpressTablesExist()
+    {
+        return (new QueryBuilder($this))->fromRaw('SHOW TABLES;');
+    }
+
     public function select($columnName)
     {
         return (new QueryBuilder($this))->select($columnName);

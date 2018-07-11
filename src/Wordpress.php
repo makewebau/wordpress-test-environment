@@ -6,6 +6,7 @@ use Dotenv\Dotenv;
 use MakeWeb\WordpressTestEnvironment\Http\Response;
 use MakeWeb\WordpressTestEnvironment\Http\RedirectHandler;
 use MakeWeb\WordpressTestEnvironment\Database\Database;
+use MakeWeb\WordpressTestEnvironment\Exceptions\WPDieException;
 use Illuminate\Support\Collection;
 
 class Wordpress
@@ -18,13 +19,17 @@ class Wordpress
 
     protected $plugins = [];
 
+    protected $useTransactions = false;
+
     public function __construct()
     {
+        define('WORDPRESS_TEST_ENVIRONMENT', true);
+
         $this->redirectHandler = new RedirectHandler;
         $this->database = new Database($this);
     }
 
-    public function boot()
+    public function initialise()
     {
         // This sets the default basepath if none has been set
         $this->withBasePath($this->basePath);
@@ -34,6 +39,7 @@ class Wordpress
         $this->loadEnv();
 
         $this->pdo = $this->database->connect();
+
         if ($this->isNotSetup()) {
             $this->setup();
         }
@@ -41,6 +47,29 @@ class Wordpress
         if ($this->isNotInstalled()) {
             $this->install();
         }
+
+        return $this;
+    }
+
+    public function boot()
+    {
+        $this->initialise();
+        $this->include('wp-load.php');
+
+        if ($this->useTransactions) {
+            $this->startTransactions();
+        }
+
+        add_filter('wp_die_handler', function () {
+            $this->wpDieHandler();
+        });
+
+        return $this;
+    }
+
+    public function useTransactions()
+    {
+        $this->useTransactions = true;
 
         return $this;
     }
@@ -143,12 +172,12 @@ class Wordpress
 
         wp_install('Wordpress Test Environment', 'admin', 'admin@domain.com', true, '', wp_slash('password'), $loaded_language);
 
-        $wpdb->get_results("SHOW TABLES");
+        $wpdb->get_results('SHOW TABLES');
     }
 
-    protected function includeFiles()
+    protected function include($filename)
     {
-        return require_once $this->basePath('index.php');
+        return require_once $this->basePath($filename);
     }
 
     protected function env($key)
@@ -195,9 +224,32 @@ class Wordpress
         });
     }
 
+    protected function startTransactions()
+    {
+        // We roll back first to make sure any open transactions are rolled back between tests
+        // in the case that transactions are opened twice before rollback
+        $this->rollbackTransactions();
+
+        global $wpdb;
+
+        $wpdb->query('SET autocommit = 0;');
+        $wpdb->query('START TRANSACTION;');
+    }
+
+    public function rollbackTransactions()
+    {
+        global $wpdb;
+
+        $wpdb->query('ROLLBACK');
+    }
+
     protected function setGlobalFunctionCallback($functionName, $callback)
     {
         global $global_function_callbacks;
+
+        if (isset($global_function_callbacks[$functionName])) {
+            return;
+        }
 
         $global_function_callbacks[$functionName] = $callback;
 
@@ -214,21 +266,32 @@ class Wordpress
 
     protected function isInstalled()
     {
-        return file_exists($this->basePath('wp-config.php'));
+        return file_exists($this->basePath('wp-config.php')) && $this->database->wordpressTablesExist();
     }
 
-    public function get($uri = '/')
+    public function get($uri = '/', $queryParameters = [])
     {
-        $this->boot();
-
         $this->installPlugins();
+
+        // Set up the WordPress query.
+        wp();
+
+        define('WP_USE_THEMES', true);
 
         ob_start();
 
-            $this->includeFiles();
-            $code = 200;
+        $_SERVER['REQUEST_URI'] = $uri.(count($queryParameters) ? '?' : '').($queryString = http_build_query($queryParameters));
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['QUERY_STRING'] = $queryString;
+        $_GET = $queryParameters;
 
-        return new Response(ob_get_clean(), $code);
+        // Load the theme template.
+        try {
+            require_once ABSPATH.WPINC.'/template-loader.php';
+        } catch (WPDieException $e) {
+        }
+
+        return new Response(ob_get_clean(), 200);
     }
 
     public function installPlugins()
@@ -265,5 +328,10 @@ class Wordpress
             ->select('options')
             ->where('option_name', '=', $key)
             ->first()['option_value']);
+    }
+
+    public function wpDieHandler($message = null)
+    {
+        throw new WPDieException($message);
     }
 }
