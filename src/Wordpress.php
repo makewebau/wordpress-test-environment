@@ -270,7 +270,7 @@ class Wordpress
         return file_exists($this->basePath('wp-config.php')) && $this->database->wordpressTablesExist();
     }
 
-    public function get($uri = '/')
+    public function get($uri = '/', $queryParameters = [])
     {
         $this->installPlugins();
 
