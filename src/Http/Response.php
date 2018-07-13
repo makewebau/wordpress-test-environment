@@ -3,6 +3,7 @@
 namespace MakeWeb\WordpressTestEnvironment\Http;
 
 use PHPUnit\Framework\Assert;
+use Illuminate\Support\Str;
 
 class Response
 {
@@ -22,6 +23,14 @@ class Response
         Assert::assertEquals(200, $this->statusCode);
 
         return $this;
+    }
+
+    public function assertSee($string)
+    {
+        Assert::assertTrue(
+            Str::contains($this->body, $string),
+            "Failed asserting that string \"$string\" can be found in page body. \n\n{$this->body}"
+        );
     }
 
     /**
@@ -55,6 +64,7 @@ class Response
                 Assert::fail('Invalid JSON was returned from the route.');
             }
         }
+
         return data_get($decodedResponse, $key);
     }
 
@@ -63,7 +73,7 @@ class Response
         return $this->body;
     }
 
-        /**
+    /**
      * Get the assertion message for assertJson.
      *
      * @param  array  $data
@@ -73,6 +83,7 @@ class Response
     {
         $expected = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         $actual = json_encode($this->decodeResponseJson(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
         return 'Unable to find JSON: '.PHP_EOL.PHP_EOL.
             "[{$expected}]".PHP_EOL.PHP_EOL.
             'within response JSON:'.PHP_EOL.PHP_EOL.
