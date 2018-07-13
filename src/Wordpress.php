@@ -3,11 +3,13 @@
 namespace MakeWeb\WordpressTestEnvironment;
 
 use Dotenv\Dotenv;
-use MakeWeb\WordpressTestEnvironment\Http\Response;
-use MakeWeb\WordpressTestEnvironment\Http\RedirectHandler;
+use Illuminate\Support\Collection;
 use MakeWeb\WordpressTestEnvironment\Database\Database;
 use MakeWeb\WordpressTestEnvironment\Exceptions\WPDieException;
-use Illuminate\Support\Collection;
+use MakeWeb\WordpressTestEnvironment\Http\RedirectHandler;
+use MakeWeb\WordpressTestEnvironment\Http\RequestHandler;
+use MakeWeb\WordpressTestEnvironment\Http\Response;
+use WP_User;
 
 class Wordpress
 {
@@ -26,6 +28,7 @@ class Wordpress
         define('WORDPRESS_TEST_ENVIRONMENT', true);
 
         $this->redirectHandler = new RedirectHandler;
+        $this->requestHandler = new RequestHandler($this);
         $this->database = new Database($this);
     }
 
@@ -54,15 +57,27 @@ class Wordpress
     public function boot()
     {
         $this->initialise();
+
         $this->include('wp-load.php');
 
         if ($this->useTransactions) {
             $this->startTransactions();
         }
 
+        // Allow us to terminate execution without halting phpunit
         add_filter('wp_die_handler', function () {
             $this->wpDieHandler();
         });
+
+        // Prevent wordpress from calling exit(), thus halting phpunit
+        add_action('admin_footer', function() {
+            wp_die();
+        });
+
+        // Prevent headers from being started
+        add_action('admin_init', function() {
+            remove_action('admin_init', 'wp_admin_headers');
+        }, PHP_INT_MIN);
 
         return $this;
     }
@@ -271,27 +286,7 @@ class Wordpress
 
     public function get($uri = '/', $queryParameters = [])
     {
-        $this->installPlugins();
-
-        // Set up the WordPress query.
-        wp();
-
-        define('WP_USE_THEMES', true);
-
-        ob_start();
-
-        $_SERVER['REQUEST_URI'] = $uri.(count($queryParameters) ? '?' : '').($queryString = http_build_query($queryParameters));
-        $_SERVER['REQUEST_METHOD'] = 'GET';
-        $_SERVER['QUERY_STRING'] = $queryString;
-        $_GET = $queryParameters;
-
-        // Load the theme template.
-        try {
-            require_once ABSPATH.WPINC.'/template-loader.php';
-        } catch (WPDieException $e) {
-        }
-
-        return new Response(ob_get_clean(), 200);
+        return $this->requestHandler->get($uri, $queryParameters);
     }
 
     public function installPlugins()
@@ -333,5 +328,48 @@ class Wordpress
     public function wpDieHandler($message = null)
     {
         throw new WPDieException($message);
+    }
+
+    public function actingAsAdmin()
+    {
+        return $this->actingAsUser($this->getAdminUser());
+    }
+
+    public function actingAsUser(WP_User $user)
+    {
+        $this->loginUser($user);
+
+        return $this;
+    }
+
+    public function loginUser(WP_User $user)
+    {
+        // Prevent wordpress from sending the cookies and thus trying to start output
+        add_filter('send_auth_cookies', function () {
+            return false;
+        });
+
+        // Since we can't send the cookies in the headers of the request (PHPUnit has already sent headers),
+        // We have to simulate it by directly modifying $_COOKIE superglobal
+        add_action('set_logged_in_cookie', function ($cookie) {
+            $_COOKIE[LOGGED_IN_COOKIE] = $cookie;
+        });
+        add_action('set_auth_cookie', function ($cookie) {
+            $_COOKIE[AUTH_COOKIE] = $cookie;
+        });
+
+        wp_set_current_user($user);
+        wp_set_auth_cookie($user->ID);
+    }
+
+    public function getAdminUser()
+    {
+        $adminUsers = get_users(['role' => 'administrator']);
+
+        if (empty($adminUsers)) {
+            return null;
+        }
+
+        return $adminUsers[0];
     }
 }
