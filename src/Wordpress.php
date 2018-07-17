@@ -67,8 +67,10 @@ class Wordpress
         }
 
         // Allow us to terminate execution without halting phpunit
-        add_filter('wp_die_handler', function () {
-            $this->wpDieHandler();
+        add_filter('wp_die_handler', function (...$args) {
+            return function(...$args) {
+                $this->wpDieHandler(...$args);
+            };
         });
 
         // Prevent wordpress from calling exit(), thus halting phpunit
