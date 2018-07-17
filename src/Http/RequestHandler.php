@@ -106,4 +106,35 @@ class RequestHandler
     
         nocache_headers();
     }
+
+    public function extractQueryParameters($uri)
+    {
+        parse_str($this->extractQueryString($uri), $result);
+
+        return $result;
+    }
+
+    public function extractQueryString($uri)
+    {
+        $components = explode('?', $uri);
+
+        if (count($components) < 2) {
+            return '';
+        }
+
+        unset($components[0]);
+
+        return implode('', $components);
+    }
+
+    public function stripQueryString($uri)
+    {
+        $components = explode('?', $uri);
+
+        if (count($components) < 2) {
+            return $uri;
+        }
+
+        return $components[0];
+    }
 }
