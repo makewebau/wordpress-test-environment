@@ -50,12 +50,17 @@ class RequestHandler
 
         ob_start();
 
-        $_SERVER['REQUEST_URI'] = $uri.(count($queryParameters) ? '?' : '').($queryString = http_build_query($queryParameters));
-        $_SERVER['REQUEST_METHOD'] = 'GET';
-        $_SERVER['QUERY_STRING'] = $queryString;
-        $_SERVER['HTTP_HOST'] = get_site_url();
-        $_GET = $queryParameters;
-		$_GET['noheader'] = true;
+        $_SERVER['REQUEST_URI'] = $uri;
+        $_SERVER['REQUEST_METHOD'] = $method;
+        $_SERVER['QUERY_STRING'] = $this->extractQueryString($uri);
+
+        // $_SERVER['HTTP_HOST'] = get_site_url();
+        $_GET = count($this->extractQueryParameters($uri)) ? $this->extractQueryParameters($uri) : [];
+        if (count($postData)) {
+            $_POST = $postData;
+        }
+
+        $_GET['noheader'] = true;
 
         // Load the theme template.
         try {
