@@ -44,7 +44,9 @@ class RequestHandler
         // Set up the WordPress query.
         wp();
 
-        define('WP_USE_THEMES', true);
+        if (!defined('WP_USE_THEMES')) {
+            define('WP_USE_THEMES', true);
+        }
 
         ob_start();
 
