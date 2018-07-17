@@ -4,6 +4,7 @@ namespace MakeWeb\WordpressTestEnvironment\Http;
 
 use MakeWeb\WordpressTestEnvironment\Wordpress;
 use MakeWeb\WordpressTestEnvironment\Exceptions\WPDieException;
+use MakeWeb\WordpressTestEnvironment\Exceptions\WPRedirectException;
 use Illuminate\Support\Str;
 
 class RequestHandler
@@ -68,11 +69,22 @@ class RequestHandler
             global $wp_db_version, $pagenow, $menu, $submenu, $_wp_menu_nopriv, $_wp_submenu_nopriv, $plugin_page, $_registered_pages;
 
             require_once $this->determineScriptFileFromUri($uri);
+
+            $responseStatus = 200;
+
         } catch (WPDieException $e) {
-            // Prevent execution from being halted
+            // Catch the exception to prevent execution from being halted
+            $responseStatus = $e->getCode();
+        } catch (WPRedirectException $e) {
+
+            $responseStatus = $e->status;
+
+            ob_end_clean();
+
+            return new Response($e->getMessage(), $e->getCode());
         }
 
-        return new Response(ob_get_clean(), 200);
+        return new Response(ob_get_clean(), $responseStatus);
     }
 
     public function determineScriptFileFromUri($uri)

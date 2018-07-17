@@ -25,6 +25,17 @@ class Response
         return $this;
     }
 
+    public function assertRedirect($url = null)
+    {
+        Assert::assertTrue(in_array((int) $this->statusCode, [301, 302]), 'Failed asserting that '.$this->statusCode.' is a redirect status code');
+
+        if (!is_null($url)) {
+            Assert::assertEquals($this->body, $url);
+        }
+
+        return $this;
+    }
+
     public function assertSee($string)
     {
         Assert::assertTrue(
@@ -57,6 +68,7 @@ class Response
     public function decodeResponseJson($key = null)
     {
         $decodedResponse = json_decode($this->getContent(), true);
+
         if (is_null($decodedResponse) || $decodedResponse === false) {
             if ($this->exception) {
                 throw $this->exception;

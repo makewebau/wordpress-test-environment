@@ -334,9 +334,9 @@ class Wordpress
             ->first()['option_value']);
     }
 
-    public function wpDieHandler($message = null)
+    public function wpDieHandler($message = '', $title = '', $arguments = [])
     {
-        throw new WPDieException($message);
+        throw new WPDieException($title.': '.$message, isset($arguments['response']) ? $arguments['response'] : 200);
     }
 
     public function actingAsAdmin()
