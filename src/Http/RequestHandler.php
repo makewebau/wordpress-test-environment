@@ -14,8 +14,25 @@ class RequestHandler
     {
         $this->wordpress = $wordpress;
     }
+
+    public function post($uri = '/', $postData = [])
+    {
+        return $this->call('POST', $uri, $postData);
+    }
     
     public function get($uri = '/', $queryParameters = [])
+    {
+        return $this->call('GET', $this->buildUri($uri, $queryParameters));
+    }
+
+    public function buildUri($uri, $queryParameters = [])
+    {
+        $queryParameters = array_merge($this->extractQueryParameters($uri), $queryParameters);
+
+        return $this->stripQueryString($uri).(count($queryParameters) ? '?' : '').(http_build_query($queryParameters));
+    }
+
+    public function call($method, $uri = '/', $postData = [])
     {
         // Make sure the uri starts with a forward slash
         if (empty($uri) || $uri[0] != '/') {

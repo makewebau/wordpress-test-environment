@@ -293,6 +293,11 @@ class Wordpress
         return $this->requestHandler->get($uri, $queryParameters);
     }
 
+    public function post($uri = '/', $postParameters = [])
+    {
+        return $this->requestHandler->post($uri, $postParameters);
+    }
+
     public function installPlugins()
     {
         foreach ($this->plugins as $pluginFilePath) {
