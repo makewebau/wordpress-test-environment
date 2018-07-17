@@ -25,7 +25,9 @@ class Wordpress
 
     public function __construct()
     {
-        define('WORDPRESS_TEST_ENVIRONMENT', true);
+        if (!defined('WORDPRESS_TEST_ENVIRONMENT')) {
+            define('WORDPRESS_TEST_ENVIRONMENT', true);
+        }
 
         $this->redirectHandler = new RedirectHandler;
         $this->requestHandler = new RequestHandler($this);
