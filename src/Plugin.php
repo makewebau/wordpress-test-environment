@@ -39,7 +39,7 @@ class Plugin
 
     public function symlink()
     {
-        $targetPath = $this->wordpress->basePath('/wp-content/plugins/'.$this->directoryName);
+        $targetPath = $this->wordpress->basePath('wp-content/plugins/'.$this->directoryName);
 
         if (is_link($targetPath)) {
             unlink($targetPath);
